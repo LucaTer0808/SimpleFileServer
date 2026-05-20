@@ -10,7 +10,7 @@
 #include "connection.hpp"
 #include "connection_status.hpp"
 
-namespace SWS { /* SimpleWebServer */
+namespace SFS { /* SimpleWebServer */
     class Socket {
         public:
             /**
@@ -41,9 +41,9 @@ namespace SWS { /* SimpleWebServer */
 
             /**
              * Accepts all new connections in the accept buffer, collects them and returns them as a vector for further processing
-             * @return A vector of unique_ptr<SWS::Connection> containing all successfully established connections.
+             * @return A vector of unique_ptr<SFS::Connection> containing all successfully established connections.
              */
-            std::vector<std::unique_ptr<SWS::Connection>> accept();
+            std::vector<std::unique_ptr<SFS::Connection>> accept();
 
             /**
              * Returns the file descriptor of the listening socket instance.

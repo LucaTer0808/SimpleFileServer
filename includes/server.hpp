@@ -15,12 +15,12 @@
 #include "data/job.hpp"
 #include "eventhandler.hpp"
 #include "utils/thread_safe_queue.hpp"
-#include "http/httphandler.hpp"
+#include "/src/http/httphandler.hpp"
 #include "http/httpmethod.hpp"
 #include "http/httpresponse.hpp"
 #include "http/httprequest.hpp"
 
-namespace SWS {
+namespace SFS {
     class Server {
         private:
             using HandlerFunc = std::function<HttpResponse(const HttpRequest&)>;

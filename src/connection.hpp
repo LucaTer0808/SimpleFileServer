@@ -7,7 +7,7 @@
 
 #include "connection_status.hpp"
 
-namespace SWS {
+namespace SFS {
     class Connection {
         private:
             static constexpr int MAXIMUM_BUFFER_SIZE = 64 * 1024; // 64 kb
@@ -31,7 +31,7 @@ namespace SWS {
              * @return COMPLETE, when all data could be pushed through the socket and nothing is left to do.
              * @return ERROR; when something unusual happened that demands the closing of the connection.
              */
-            SWS::ConnectionStatus send(const std::string& data);
+            SFS::ConnectionStatus send(const std::string& data);
 
             /**
              * @brief Finds the index of the beginning of the \r\n\r\n sequence that indicates the end of a request.
@@ -92,7 +92,7 @@ namespace SWS {
              * @return ERROR, when an error occured while pushing data through the socket.
              * @return CLOSED, when the connection was closed.
              */
-            SWS::ConnectionStatus try_serve_future();
+            SFS::ConnectionStatus try_serve_future();
 
             /**
              * @brief Tries to push the data from the output buffer through the channel to the client socket.
@@ -101,7 +101,7 @@ namespace SWS {
              * @return ERROR, when an error occured while pushing data through the socket.
              * @return CLOSED, when the connection was closed.
              */
-            SWS::ConnectionStatus push_data();
+            SFS::ConnectionStatus push_data();
             
             /**
              * @brief Reveives data from the client socket and writes it to the input buffer.

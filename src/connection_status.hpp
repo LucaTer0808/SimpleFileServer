@@ -1,7 +1,7 @@
 #ifndef connection_status_hpp
 #define connection_status_hpp
 
-namespace SWS {
+namespace SFS {
     enum class ConnectionStatus {
         // status codes for receive operation
         OPEN,

@@ -1,7 +1,7 @@
 #ifndef thread_safe_queue
 #define thread_safe_queue
 
-namespace SWS {
+namespace SFS {
     /**
      * Custom thread-safe implementation of a queue using mutex and condition variable.
      */

@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 
-namespace SWS {
+namespace SFS {
     class EventHandler {
         public:
             static constexpr int MAX_EVENTS = 128;
@@ -49,20 +49,20 @@ namespace SWS {
              * @return FAILURE, if a negative fd was passed or the registration of a socket represented by a valid fd failed.
              * @return SUCCESS, if the socket represented by the fd was registered properly.
              */
-            SWS::EventHandlerStatus add(int fd, uint32_t events);
+            SFS::EventHandlerStatus add(int fd, uint32_t events);
 
             /**
              * @brief Editing the events polled for the socket with the given fd.
              * @param fd The file descriptor in question.
              * @param events The new events connected with |.
              */
-            SWS::EventHandlerStatus edit(int fd, uint32_t events);
+            SFS::EventHandlerStatus edit(int fd, uint32_t events);
 
             /**
              * @brief Removes a file descriptor representing a socket from event polling, e.g. when it is closed.
              * @param fd The file descriptor representing the socket.
              */
-            SWS::EventHandlerStatus remove(int fd);
+            SFS::EventHandlerStatus remove(int fd);
         
         private:
             int epoll_fd;

@@ -3,7 +3,7 @@
 
 #include <future>
 
-namespace SWS {
+namespace SFS {
     /**
      * Data class representing a job composed of a promise to fullfill and a request string.
      */

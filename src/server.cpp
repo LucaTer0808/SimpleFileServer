@@ -3,23 +3,23 @@
 #include "../includes/server.hpp"
 #include "common/log.hpp"
 
-SWS::Server::Server() : jobs(), worker_threads(), listening_socket(nullptr), conns(), event_handler(), http_handler() {
+SFS::Server::Server() : jobs(), worker_threads(), listening_socket(nullptr), conns(), event_handler(), http_handler() {
 }
 
-void SWS::Server::get(std::string route, HandlerFunc func) {
+void SFS::Server::get(std::string route, HandlerFunc func) {
     std::string route_copy = route;
-    SWS::HttpHandlerStatus status = this->http_handler.addRoute(SWS::HttpMethod::GET, std::move(route), std::move(func));
+    SFS::HttpHandlerStatus status = this->http_handler.addRoute(SFS::HttpMethod::GET, std::move(route), std::move(func));
 
-    if (status == SWS::HttpHandlerStatus::EXISTS) {
-        SWS::log(SWS::LogLevel::WARNING, std::string("The registration of the GET Method with Route ") + route_copy + std::string(" did not work. Most likely, the route is registered alredy!"));
+    if (status == SFS::HttpHandlerStatus::EXISTS) {
+        SFS::log(SFS::LogLevel::WARNING, std::string("The registration of the GET Method with Route ") + route_copy + std::string(" did not work. Most likely, the route is registered alredy!"));
     }
 }
 
-void SWS::Server::start(uint16_t port, size_t num_workers = 0) {
+void SFS::Server::start(uint16_t port, size_t num_workers = 0) {
     try {
-        this->listening_socket = std::make_unique<SWS::Socket>(port);
+        this->listening_socket = std::make_unique<SFS::Socket>(port);
     } catch (std::runtime_error &error) {
-        SWS::log(SWS::LogLevel::ERROR, std::string("The SimpleWebServer could not be started!"));
+        SFS::log(SFS::LogLevel::ERROR, std::string("The SimpleWebServer could not be started!"));
         return;
     }
 
@@ -33,11 +33,11 @@ void SWS::Server::start(uint16_t port, size_t num_workers = 0) {
         });
     }
 
-    SWS::log(SWS::LogLevel::INFO, std::string("SimpleWebServer is now listening on port ") + std::to_string(port));
+    SFS::log(SFS::LogLevel::INFO, std::string("SimpleWebServer is now listening on port ") + std::to_string(port));
     this->master_thread_loop();
 }
 
-void SWS::Server::master_thread_loop() {
+void SFS::Server::master_thread_loop() {
     while(true) {
         std::unordered_map<int, uint32_t> events = this->event_handler.wait_events();
 
@@ -52,25 +52,25 @@ void SWS::Server::master_thread_loop() {
 }
 
 // TODO: Implement
-void SWS::Server::worker_thread_loop() {
+void SFS::Server::worker_thread_loop() {
     while(true) {}
 }
 
 // TODO: Implement
-void SWS::Server::handle_socket_events(int fd, uint32_t event_mask) {
+void SFS::Server::handle_socket_events(int fd, uint32_t event_mask) {
     if (event_mask  )
     return;
 }
 
-void SWS::Server::handle_connection_event(int fd, uint32_t event_mask) {
+void SFS::Server::handle_connection_event(int fd, uint32_t event_mask) {
     auto it = this->conns.find(fd);
     if (it == this->conns.end()) {
         this->event_handler.remove(fd);
-        SWS::log(SWS::LogLevel::WARNING, std::format("The fd: {} does not represent an active connection!", fd));
+        SFS::log(SFS::LogLevel::WARNING, std::format("The fd: {} does not represent an active connection!", fd));
         return;
     }
 
-    SWS::Connection& conn = *(it->second);
+    SFS::Connection& conn = *(it->second);
 
     if (event_mask & EPOLLIN) {
         bool correct = conn.receive();
@@ -88,22 +88,22 @@ void SWS::Server::handle_connection_event(int fd, uint32_t event_mask) {
         }
     }
 
-    SWS::ConnectionStatus status = conn.try_serve_future();
+    SFS::ConnectionStatus status = conn.try_serve_future();
     if (event_mask & EPOLLOUT) {
         status = conn.push_data();
     }
 
     switch (status) {
-        case SWS::ConnectionStatus::ERROR:
+        case SFS::ConnectionStatus::ERROR:
             this->event_handler.remove(fd);
             this->conns.erase(fd);
             return;
         
-        case SWS::ConnectionStatus::WANT_WRITE:
+        case SFS::ConnectionStatus::WANT_WRITE:
             this->event_handler.edit(fd, EPOLLIN | EPOLLOUT);
             break;
 
-        case SWS::ConnectionStatus::COMPLETE:
+        case SFS::ConnectionStatus::COMPLETE:
             this->event_handler.edit(fd, EPOLLIN);
             break;
 
@@ -113,24 +113,24 @@ void SWS::Server::handle_connection_event(int fd, uint32_t event_mask) {
     }
 }
 
-void SWS::Server::append_job(SWS::Connection& conn, std::string request_string) {
+void SFS::Server::append_job(SFS::Connection& conn, std::string request_string) {
     std::promise<std::string> promise;
     std::future<std::string> future = promise.get_future();
 
     conn.enqueue_future(std::move(future));
 
-    SWS::Job job;
+    SFS::Job job;
     job.request = std::move(request_string);
     job.promise = std::move(promise);
 
     this->jobs.push(std::move(job));
 }
 
-size_t SWS::Server::calculate_thread_number(size_t num_workers) {
+size_t SFS::Server::calculate_thread_number(size_t num_workers) {
     size_t min_concurrency = std::thread::hardware_concurrency();
 
     if (num_workers == 0) {
-        return min_concurrency * SWS::Server::THREAD_MULT;
+        return min_concurrency * SFS::Server::THREAD_MULT;
     }
         
     if (num_workers > min_concurrency) {
