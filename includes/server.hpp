@@ -10,37 +10,35 @@
 #include <condition_variable>
 #include <thread>
 #include <future>
+#include <filesystem>
 
 #include "socket.hpp"
 #include "data/job.hpp"
 #include "eventhandler.hpp"
 #include "utils/thread_safe_queue.hpp"
-#include "/src/http/httphandler.hpp"
-#include "http/httpmethod.hpp"
-#include "http/httpresponse.hpp"
-#include "http/httprequest.hpp"
 
 namespace SFS {
     class Server {
         private:
-            using HandlerFunc = std::function<HttpResponse(const HttpRequest&)>;
+            std::filesystem::path base_dir;
 
-            SWS::ThreadSafeQueue<SWS::Job> jobs;
+            SFS::ThreadSafeQueue<SFS::Job> jobs;
 
             std::vector<std::jthread> worker_threads;
 
-            std::unique_ptr<SWS::Socket> listening_socket; // to let it also be null
-            SWS::EventHandler event_handler;
-            std::unordered_map<int, std::unique_ptr<SWS::Connection>> conns;
-            SWS::HttpHandler http_handler;
+            std::unique_ptr<SFS::Socket> listening_socket; // to let it also be null
+            SFS::EventHandler event_handler;
+            std::unordered_map<int, std::unique_ptr<SFS::Connection>> conns;
 
         public:
-            static constexpr size_t THREAD_MULT = 3;
+            static constexpr std::size_t THREAD_MULT = 3;
     
             /**
-             * @brief Constructor for a Server object. Since all other objects are constructed via the basic constructor, we may just use the default constructor here.
+             * @brief Constructor for a Server object. Since all other objects are constructed via the basic constructor,
+             * we may just use the default constructor here.
+             * @param path The path to the directory containing the files to serve. This is used to calculate the full path of a requested file.
              */
-            Server() = default;
+            Server(std::string path);
 
             /**
              * @brief Desctructor for an existing Server object. We can just use the default destructor.
@@ -70,7 +68,7 @@ namespace SFS {
              * @param conn The connection to append the job to.
              * @param request_string The request as a string to serve.
              */
-            void append_job(SWS::Connection& conn, std::string request_string);
+            void append_job(SFS::Connection& conn, std::string request_string);
 
             void handle_socket_events(int fd, uint32_t event_mask);
 
@@ -84,20 +82,13 @@ namespace SFS {
 
         public:
             /**
-            * @brief Registers a GET-Endpoint.
-            * @param route The Route to address.
-            * @param func The function to execute. Can be defined inline which is cool. 
-            */
-            void get(std::string route, HandlerFunc func);
-
-            /**
              * @brief Start up the server. Before starting, all routes have to be added to ensure functionality!
              * @param port The port to listen on.
              * @param num_workers The amount of worker threads for increased concurrency. If none is passed, we multiply the value
              * std::thread::hardware_concurrency delivers by a fixed constant. std::thread::hardware_concurrency also works as the lower bound
              * for the amunt of threads running to at least make use of all cores. 0 by deafult.
              */
-            void start(uint16_t port, size_t num_workers = 0);
+            void start(uint16_t port, std::size_t num_workers = 0);
 
             /**
              * @brief The main loop for the master thread responsible for managing connections and distributing orders.
@@ -114,7 +105,12 @@ namespace SFS {
              * Calculates the required number of threads as stated in the start()-method;
              * @param num_workers The desired number of worker threads or 0 if left basic.
              */
-            size_t calculate_thread_number(size_t num_workers);
+            std::size_t calculate_thread_number(std::size_t num_workers);
+
+            /**
+             * @returns The path of the directory containing the files to serve. This is used to calculate the full path of a requested file.
+             */
+            std::filesystem::path get_base_dir();
     };
 }
 

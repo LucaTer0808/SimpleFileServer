@@ -1,21 +1,14 @@
 #include <sys/epoll.h>
+#include <fstream>
+#include <sstream>
 
 #include "../includes/server.hpp"
 #include "common/log.hpp"
 
-SFS::Server::Server() : jobs(), worker_threads(), listening_socket(nullptr), conns(), event_handler(), http_handler() {
+SFS::Server::Server(std::string path) : base_dir(std::filesystem::canonical(path)), jobs(), worker_threads(), listening_socket(nullptr), conns(), event_handler() {
 }
 
-void SFS::Server::get(std::string route, HandlerFunc func) {
-    std::string route_copy = route;
-    SFS::HttpHandlerStatus status = this->http_handler.addRoute(SFS::HttpMethod::GET, std::move(route), std::move(func));
-
-    if (status == SFS::HttpHandlerStatus::EXISTS) {
-        SFS::log(SFS::LogLevel::WARNING, std::string("The registration of the GET Method with Route ") + route_copy + std::string(" did not work. Most likely, the route is registered alredy!"));
-    }
-}
-
-void SFS::Server::start(uint16_t port, size_t num_workers = 0) {
+void SFS::Server::start(uint16_t port, std::size_t num_workers = 0) {
     try {
         this->listening_socket = std::make_unique<SFS::Socket>(port);
     } catch (std::runtime_error &error) {
@@ -25,9 +18,9 @@ void SFS::Server::start(uint16_t port, size_t num_workers = 0) {
 
     this->event_handler.add(this->listening_socket->get_fd(), EPOLLIN); // registers listening socket for EPOLLIN
 
-    size_t actual_concurrency = this->calculate_thread_number(num_workers);
+    std::size_t actual_concurrency = this->calculate_thread_number(num_workers);
 
-    for (size_t i = 0; i < actual_concurrency; ++i) {
+    for (std::size_t i = 0; i < actual_concurrency; ++i) {
         this->worker_threads.emplace_back([this]() {
             this->worker_thread_loop();
         });
@@ -53,7 +46,42 @@ void SFS::Server::master_thread_loop() {
 
 // TODO: Implement
 void SFS::Server::worker_thread_loop() {
-    while(true) {}
+    while(true) {
+        Job jobToProcess;
+        this->jobs.pop_and_block(jobToProcess);
+
+        std::string path = std::filesystem::path(std::move(jobToProcess.request));
+
+        if (!path.empty() && path.front() == '/') {
+            jobToProcess.promise.set_value("The path you passed is invalid! It must not start with '/' to prevent directory traversal attacks!");
+            continue;
+        }
+
+        if (!path.empty() && path.back() == '/') {
+            jobToProcess.promise.set_value("The path you passed is invalid! It must not end with '/' to prevent directory traversal attacks!");
+            continue;
+        }
+
+        if (path.find("..") != std::string::npos) {
+            jobToProcess.promise.set_value("The path you passed is invalid! It must not contain '..' to prevent directory traversal attacks!");
+            continue;
+        }
+
+        std::filesystem::path base_dir = this->get_base_dir();
+        std::filesystem::path full_path = base_dir / path;
+
+        std::ifstream file(full_path, std::ios::binary);
+        if (!file) {
+            jobToProcess.promise.set_value("The requested file could not be found on the server!");
+            continue;
+        }
+        
+
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        jobToProcess.promise.set_value(buffer.str());
+
+    }
 }
 
 // TODO: Implement
@@ -126,8 +154,8 @@ void SFS::Server::append_job(SFS::Connection& conn, std::string request_string) 
     this->jobs.push(std::move(job));
 }
 
-size_t SFS::Server::calculate_thread_number(size_t num_workers) {
-    size_t min_concurrency = std::thread::hardware_concurrency();
+std::size_t SFS::Server::calculate_thread_number(std::size_t num_workers) {
+    std::size_t min_concurrency = std::thread::hardware_concurrency();
 
     if (num_workers == 0) {
         return min_concurrency * SFS::Server::THREAD_MULT;

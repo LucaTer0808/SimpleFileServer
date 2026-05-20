@@ -64,7 +64,7 @@ SFS::ConnectionStatus SFS::Connection::send(const std::string& data) {
 
 SFS::ConnectionStatus SFS::Connection::push_data() {
     while(!this->buffer_out.empty()) {
-        ssize_t sent = ::send(this->client_fd,
+        std::size_t sent = ::send(this->client_fd,
             this->buffer_out.data(),
             this->buffer_out.size(),
             MSG_NOSIGNAL
@@ -84,7 +84,7 @@ SFS::ConnectionStatus SFS::Connection::push_data() {
             return SFS::ConnectionStatus::ERROR;
         }
 
-        this->buffer_out.erase(0, static_cast<size_t>(sent));
+        this->buffer_out.erase(0, static_cast<std::size_t>(sent));
     }
 
     return SFS::ConnectionStatus::COMPLETE; // if the send buffer is empty, we can happily exit!
@@ -94,7 +94,7 @@ bool SFS::Connection::receive() {
     std::array<char, 4096> buffer;
 
     while(true) {
-        ssize_t bytes_received = ::recv(this->client_fd, buffer.data(), buffer.size(), 0);
+        std::size_t bytes_received = ::recv(this->client_fd, buffer.data(), buffer.size(), 0);
 
         if (bytes_received < 0) {
             if (errno != EWOULDBLOCK && errno != EAGAIN) {
@@ -120,17 +120,17 @@ bool SFS::Connection::receive() {
 }
 
 std::string SFS::Connection::get_latest_request() { 
-    size_t pos = this->find_request_ending();
+    std::size_t header_ending = this->find_header_ending();
 
-    if (pos == std::string::npos) {
+    if (header_ending == std::string::npos) {
         return "";
     }
 
-    size_t total_len = pos + 4; // \r and \n are accounted for as one byte!
+    std::size_t total_len = header_ending + 4; // \r and \n are accounted for as one byte!
 
-    std::string request = this->buffer_in.substr(0, total_len);
+    std::string path_to_file = this->buffer_in.substr(0, header_ending);
     this->buffer_in.erase(0, total_len);
-    return request;
+    return path_to_file;
 }
 
 SFS::ConnectionStatus SFS::Connection::try_serve_future() {
@@ -168,6 +168,6 @@ void SFS::Connection::close() {
     }
 }
 
-size_t SFS::Connection::find_request_ending() const {
+std::size_t SFS::Connection::find_header_ending() const {
     return this->buffer_in.find("\r\n\r\n");
 }

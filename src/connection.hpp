@@ -34,10 +34,10 @@ namespace SFS {
             SFS::ConnectionStatus send(const std::string& data);
 
             /**
-             * @brief Finds the index of the beginning of the \r\n\r\n sequence that indicates the end of a request.
-             * @return The index as size_t or std::string::npos, if no substring with said sequence was found.
+             * @brief Finds the index of the beginning of the \r\n\r\n sequence that indicates the end of a header.
+             * @return The index as std::size_t or std::string::npos, if no substring with said sequence was found.
              */
-            size_t find_request_ending() const;
+            std::size_t find_header_ending() const;
 
             /**
              * Closing the connection to the socket.

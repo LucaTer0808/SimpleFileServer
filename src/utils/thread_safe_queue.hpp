@@ -1,6 +1,11 @@
 #ifndef thread_safe_queue
 #define thread_safe_queue
 
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <utility>
+
 namespace SFS {
     /**
      * Custom thread-safe implementation of a queue using mutex and condition variable.
@@ -9,7 +14,7 @@ namespace SFS {
     class ThreadSafeQueue {
         private:
             std::queue<T> queue;
-            std::mutex queue_mutex;
+            mutable std::mutex queue_mutex;
             std::condition_variable not_empty;
 
         public:
@@ -26,7 +31,7 @@ namespace SFS {
              * @brief Pushes an element to the queue and appends it at the end.
              * @param element The element to push.
              */
-            void push(const T element) {
+            void push(T element) {
                 std::lock_guard<std::mutex> lock(this->queue_mutex);
                 this->queue.push(std::move(element));
                 this->not_empty.notify_one();
