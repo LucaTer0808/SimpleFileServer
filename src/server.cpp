@@ -32,6 +32,11 @@ void SFS::Server::start(uint16_t port, std::size_t num_workers) {
 
 void SFS::Server::master_thread_loop() {
     while(true) {
+        for (auto& [fd, conn] : this->conns) {
+            SFS::ConnectionStatus status = conn->try_serve_future();
+            this->update_event_subscription(fd, status);
+        }
+
         std::unordered_map<int, uint32_t> events = this->event_handler.wait_events();
 
         for (auto& [fd, event_mask] : events) {
@@ -46,9 +51,10 @@ void SFS::Server::master_thread_loop() {
 
 void SFS::Server::worker_thread_loop() {
     while(true) {
-        Job jobToProcess;
+        SFS::Job jobToProcess;
         this->jobs.pop_and_block(jobToProcess);
 
+        SFS::log(SFS::LogLevel::INFO, "Worker thread " + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + " is processing a new job with request: " + jobToProcess.request);
         std::string path = std::move(jobToProcess.request);
 
         if (!path.empty() && path.front() == '/') {
@@ -79,6 +85,7 @@ void SFS::Server::worker_thread_loop() {
         std::stringstream buffer;
         buffer << file.rdbuf();
         jobToProcess.promise.set_value(buffer.str());
+        SFS::log(SFS::LogLevel::INFO, "Worker thread " + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + " has finished processing the job with request: " + path);
     }
 }
 
@@ -117,16 +124,55 @@ void SFS::Server::handle_connection_event(int fd, uint32_t event_mask) {
         std::string request = conn.get_latest_request();
 
         if (!request.empty()) {
+            SFS::log(SFS::LogLevel::INFO, "Received a new non-empty request from client with FD: " + std::to_string(fd) + ". Request: " + request);
             this->append_job(conn, std::move(request));
         }
     }
 
-    SFS::ConnectionStatus status = conn.try_serve_future();
+    SFS::ConnectionStatus status = SFS::ConnectionStatus::COMPLETE; // just asume everything is fine before sending
     if (event_mask & EPOLLOUT) {
         status = conn.push_data();
     }
 
-    bool event_handler_success;
+    this->update_event_subscription(fd, status);
+}
+
+void SFS::Server::append_job(SFS::Connection& conn, std::string request_string) {
+    std::promise<std::string> promise;
+    std::future<std::string> future = promise.get_future();
+
+    SFS::log(SFS::LogLevel::INFO, "Appending a new job to the connection with FD: " + std::to_string(conn.get_client_fd()) + ". Request: " + request_string);
+    conn.enqueue_future(std::move(future));
+
+    SFS::Job job;
+    job.request = std::move(request_string);
+    job.promise = std::move(promise);
+
+    SFS::log(SFS::LogLevel::INFO, "Pushing a new job to the job queue for connection with FD: " + std::to_string(conn.get_client_fd()) + ". Request: " + request_string);
+    this->jobs.push(std::move(job));
+}
+
+std::size_t SFS::Server::calculate_thread_number(std::size_t num_workers) {
+    std::size_t min_concurrency = std::thread::hardware_concurrency();
+    min_concurrency = min_concurrency == 0 ? 1 : min_concurrency;
+
+    if (num_workers == 0) {
+        return min_concurrency * SFS::Server::THREAD_MULT;
+    }
+        
+    if (num_workers > min_concurrency) {
+        return num_workers;
+    }
+
+    return min_concurrency;
+}
+
+std::filesystem::path SFS::Server::get_base_dir() const {
+    return this->base_dir;
+}
+
+void SFS::Server::update_event_subscription(int fd, SFS::ConnectionStatus status) {
+        bool event_handler_success;
 
     switch (status) {
         case SFS::ConnectionStatus::ERROR:
@@ -151,35 +197,4 @@ void SFS::Server::handle_connection_event(int fd, uint32_t event_mask) {
         this->event_handler.remove(fd);
         this->conns.erase(fd);
     }
-}
-
-void SFS::Server::append_job(SFS::Connection& conn, std::string request_string) {
-    std::promise<std::string> promise;
-    std::future<std::string> future = promise.get_future();
-
-    conn.enqueue_future(std::move(future));
-
-    SFS::Job job;
-    job.request = std::move(request_string);
-    job.promise = std::move(promise);
-
-    this->jobs.push(std::move(job));
-}
-
-std::size_t SFS::Server::calculate_thread_number(std::size_t num_workers) {
-    std::size_t min_concurrency = std::thread::hardware_concurrency();
-
-    if (num_workers == 0) {
-        return min_concurrency * SFS::Server::THREAD_MULT;
-    }
-        
-    if (num_workers > min_concurrency) {
-        return num_workers;
-    }
-
-    return min_concurrency;
-}
-
-std::filesystem::path SFS::Server::get_base_dir() const {
-    return this->base_dir;
 }

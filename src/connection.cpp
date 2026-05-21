@@ -1,4 +1,4 @@
-#include<stdexcept>
+#include <stdexcept>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -60,6 +60,7 @@ SFS::Connection& SFS::Connection::operator=(Connection&& other) noexcept {
 
 SFS::ConnectionStatus SFS::Connection::send(const std::string& data) {
     this->buffer_out.append(data);
+    SFS::log(SFS::LogLevel::INFO, "Appending data to the output buffer of client with FD: " + std::to_string(this->client_fd) + ". Buffer size is now: " + std::to_string(this->buffer_out.size()) + " bytes.");
     return this->push_data();
 }
 
@@ -86,6 +87,7 @@ SFS::ConnectionStatus SFS::Connection::push_data() {
         }
 
         this->buffer_out.erase(0, static_cast<std::size_t>(sent));
+        SFS::log(SFS::LogLevel::INFO, "Sent " + std::to_string(sent) + " bytes to client with FD: " + std::to_string(this->client_fd) + ". Remaining buffer size is: " + std::to_string(this->buffer_out.size()) + " bytes.");
     }
 
     return SFS::ConnectionStatus::COMPLETE; // if the send buffer is empty, we can happily exit!
@@ -95,7 +97,7 @@ bool SFS::Connection::receive() {
     std::array<char, 4096> buffer;
 
     while(true) {
-        std::size_t bytes_received = ::recv(this->client_fd, buffer.data(), buffer.size(), 0);
+        ssize_t bytes_received = ::recv(this->client_fd, buffer.data(), buffer.size(), 0);
 
         if (bytes_received < 0) {
             if (errno != EWOULDBLOCK && errno != EAGAIN) {
@@ -112,6 +114,7 @@ bool SFS::Connection::receive() {
         }
 
         this->buffer_in.append(buffer.data(), bytes_received);
+        SFS::log(SFS::LogLevel::INFO, "Received " + std::to_string(bytes_received) + " bytes from client with FD: " + std::to_string(this->client_fd));
 
         if (this->buffer_in.size() > MAXIMUM_BUFFER_SIZE) { // value is pickd arbitrarily. Can be changed if needed!
             SFS::log(SFS::LogLevel::WARNING, "Request size exceeded the healthy limit of " + std::to_string(MAXIMUM_BUFFER_SIZE / 1024) + " kb on client socket with FD: " + std::to_string(this->client_fd));  
@@ -139,9 +142,11 @@ SFS::ConnectionStatus SFS::Connection::try_serve_future() {
         return SFS::ConnectionStatus::WAITING;
     }
 
+    SFS::log(SFS::LogLevel::INFO, "Serving a new response to client with FD: " + std::to_string(this->client_fd));
     std::string response = this->responses.front().get();
     this->responses.pop();
 
+    SFS::log(SFS::LogLevel::INFO, "Finished serving the response to client with FD: " + std::to_string(this->client_fd));
     return this->send(response);
 }
 
@@ -151,6 +156,7 @@ bool SFS::Connection::is_future_complete() const {
     }
 
     if (this->responses.front().wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        SFS::log(SFS::LogLevel::INFO, "The first future in the response queue for client with FD: " + std::to_string(this->client_fd) + " is complete and ready to be served!");
         return true;
     }
 

@@ -85,6 +85,11 @@ namespace SFS {
              */
             void handle_connection_event(int fd, uint32_t event_mask);
 
+            /**
+             * @brief Updates the event subscription for a connection after trying to serve a future. If the status is WANT_WRITE, we need to subscribe for EPOLLOUT, otherwise we can just subscribe for EPOLLIN.
+             */
+            void update_event_subscription(int fd, SFS::ConnectionStatus status);
+
         public:
             /**
              * @brief Start up the server. Before starting, all routes have to be added to ensure functionality!
