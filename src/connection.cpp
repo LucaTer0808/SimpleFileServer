@@ -8,6 +8,7 @@
 
 #include "connection.hpp"
 #include "common/log.hpp"
+#include "common/log_level.hpp"
 
 SFS::Connection::Connection(const int client_fd) : client_fd(client_fd), buffer_in(""), buffer_out(""), responses() {
     if (client_fd < 0) {
@@ -170,4 +171,8 @@ void SFS::Connection::close() {
 
 std::size_t SFS::Connection::find_header_ending() const {
     return this->buffer_in.find("\r\n\r\n");
+}
+
+int SFS::Connection::get_client_fd() const {
+    return this->client_fd;
 }

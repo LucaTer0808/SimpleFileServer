@@ -2,13 +2,13 @@
 #include <fstream>
 #include <sstream>
 
-#include "../includes/server.hpp"
+#include "server.hpp"
 #include "common/log.hpp"
 
 SFS::Server::Server(std::string path) : base_dir(std::filesystem::canonical(path)), jobs(), worker_threads(), listening_socket(nullptr), conns(), event_handler() {
 }
 
-void SFS::Server::start(uint16_t port, std::size_t num_workers = 0) {
+void SFS::Server::start(uint16_t port, std::size_t num_workers) {
     try {
         this->listening_socket = std::make_unique<SFS::Socket>(port);
     } catch (std::runtime_error &error) {
@@ -36,21 +36,20 @@ void SFS::Server::master_thread_loop() {
 
         for (auto& [fd, event_mask] : events) {
             if (fd == this->listening_socket->get_fd()) {
-                handle_socket_events(fd, event_mask);
+                this->handle_socket_events(event_mask);
             } else {
-                handle_connection_event(fd, event_mask);
+                this->handle_connection_event(fd, event_mask);
             }
         }
     }
 }
 
-// TODO: Implement
 void SFS::Server::worker_thread_loop() {
     while(true) {
         Job jobToProcess;
         this->jobs.pop_and_block(jobToProcess);
 
-        std::string path = std::filesystem::path(std::move(jobToProcess.request));
+        std::string path = std::move(jobToProcess.request);
 
         if (!path.empty() && path.front() == '/') {
             jobToProcess.promise.set_value("The path you passed is invalid! It must not start with '/' to prevent directory traversal attacks!");
@@ -80,14 +79,20 @@ void SFS::Server::worker_thread_loop() {
         std::stringstream buffer;
         buffer << file.rdbuf();
         jobToProcess.promise.set_value(buffer.str());
-
     }
 }
 
 // TODO: Implement
-void SFS::Server::handle_socket_events(int fd, uint32_t event_mask) {
-    if (event_mask  )
-    return;
+void SFS::Server::handle_socket_events(uint32_t event_mask) {
+    if (event_mask & EPOLLIN) {
+        std::vector<std::unique_ptr<SFS::Connection>> new_conns = this->listening_socket->accept();
+
+        for (std::unique_ptr<SFS::Connection>& conn : new_conns) {
+            int conn_fd = conn->get_client_fd();
+            this->event_handler.add(conn_fd, EPOLLIN);
+            this->conns.emplace(conn_fd, std::move(conn));
+        }
+    }
 }
 
 void SFS::Server::handle_connection_event(int fd, uint32_t event_mask) {
@@ -121,23 +126,30 @@ void SFS::Server::handle_connection_event(int fd, uint32_t event_mask) {
         status = conn.push_data();
     }
 
+    bool event_handler_success;
+
     switch (status) {
         case SFS::ConnectionStatus::ERROR:
-            this->event_handler.remove(fd);
+            event_handler_success = this->event_handler.remove(fd);
             this->conns.erase(fd);
             return;
         
         case SFS::ConnectionStatus::WANT_WRITE:
-            this->event_handler.edit(fd, EPOLLIN | EPOLLOUT);
+            event_handler_success = this->event_handler.edit(fd, EPOLLIN | EPOLLOUT);
             break;
 
         case SFS::ConnectionStatus::COMPLETE:
-            this->event_handler.edit(fd, EPOLLIN);
+            event_handler_success = this->event_handler.edit(fd, EPOLLIN);
             break;
 
         default:
-            this->event_handler.edit(fd, EPOLLIN | EPOLLOUT);
+            event_handler_success = this->event_handler.edit(fd, EPOLLIN | EPOLLOUT);
             break;
+    }
+
+    if (!event_handler_success) {
+        this->event_handler.remove(fd);
+        this->conns.erase(fd);
     }
 }
 
@@ -166,4 +178,8 @@ std::size_t SFS::Server::calculate_thread_number(std::size_t num_workers) {
     }
 
     return min_concurrency;
+}
+
+std::filesystem::path SFS::Server::get_base_dir() const {
+    return this->base_dir;
 }

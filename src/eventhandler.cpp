@@ -58,10 +58,10 @@ std::unordered_map<int, uint32_t> SFS::EventHandler::wait_events() {
     return result;
 }
 
-SFS::EventHandlerStatus SFS::EventHandler::add(int fd, uint32_t events) {
+bool SFS::EventHandler::add(int fd, uint32_t events) {
     if (fd < 0) {
         SFS::log(SFS::LogLevel::WARNING, std::string("Negative fd passed to the EventHandler. No Socket can be added!"));
-        return SFS::EventHandlerStatus::FAILURE;
+        return false;
     }
 
     epoll_event ev{};
@@ -71,16 +71,16 @@ SFS::EventHandlerStatus SFS::EventHandler::add(int fd, uint32_t events) {
     int result = epoll_ctl(this->epoll_fd, EPOLL_CTL_ADD, fd, &ev);
     if (result < 0) {
         SFS::log_errno(std::string("Adding the socket with fd: ") + std::to_string(fd) + std::string(" for event polling failed!"));
-        return SFS::EventHandlerStatus::FAILURE;
+        return false;
     }
 
-    return SFS::EventHandlerStatus::SUCCESS;
+    return true;
 }
 
-SFS::EventHandlerStatus SFS::EventHandler::edit(int fd, uint32_t events) {
+bool SFS::EventHandler::edit(int fd, uint32_t events) {
     if (fd < 0) {
         SFS::log(SFS::LogLevel::WARNING, std::string("Negative fd passed to the EventHandler. No Socket can be edited!"));
-        return SFS::EventHandlerStatus::FAILURE;
+        return false;
     }
 
     epoll_event ev{};
@@ -90,26 +90,26 @@ SFS::EventHandlerStatus SFS::EventHandler::edit(int fd, uint32_t events) {
     int result = epoll_ctl(this->epoll_fd, EPOLL_CTL_MOD, fd, &ev);
     if (result < 0) {
         SFS::log_errno(std::string("Editing the socket with fd: ") + std::to_string(fd) + std::string(" failed!"));
-        return SFS::EventHandlerStatus::FAILURE;
+        return false;
     }
 
-    return SFS::EventHandlerStatus::SUCCESS;
+    return true;
 }
 
-SFS::EventHandlerStatus SFS::EventHandler::remove(int fd) {
+bool SFS::EventHandler::remove(int fd) {
     if (fd < 0) {
         SFS::log(SFS::LogLevel::WARNING, std::string("Negative fd passed to the EventHandler. No Socket can be removed!"));
-        return SFS::EventHandlerStatus::FAILURE;
+        return false;
     }
 
     int result = epoll_ctl(this->epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 
     if (result < 0) {
         SFS::log_errno(std::string("Removing the event polling for socket with fd: ") + std::to_string(fd) + std::string(" has failed!"));
-        return SFS::EventHandlerStatus::FAILURE;
+        return false;
     }
 
-    return SFS::EventHandlerStatus::SUCCESS;
+    return true;
 }
 
 void SFS::EventHandler::close() {

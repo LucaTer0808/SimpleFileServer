@@ -115,6 +115,11 @@ namespace SFS {
              * @return The whole request as a string or "", if the buffer does not contain a full request.
              */
             std::string get_latest_request();
+
+            /**
+             * @return The file descriptor of the client socket
+             */
+            int get_client_fd() const;
     };
 }
 

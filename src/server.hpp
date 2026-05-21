@@ -70,7 +70,12 @@ namespace SFS {
              */
             void append_job(SFS::Connection& conn, std::string request_string);
 
-            void handle_socket_events(int fd, uint32_t event_mask);
+            /**
+             * @brief Handles all event related logic for the listening socket, mainly accepting new connections and subscribing them for events.
+             * The actual work will be done in handle_socket_events.
+             * @param event_mask The bitmask representing all incoming events.
+             */
+            void handle_socket_events(uint32_t event_mask);
 
             /**
              * Handles all event related logic for the connection with the given fd, including subscription for EPOLLOUT, job generation
@@ -88,7 +93,7 @@ namespace SFS {
              * std::thread::hardware_concurrency delivers by a fixed constant. std::thread::hardware_concurrency also works as the lower bound
              * for the amunt of threads running to at least make use of all cores. 0 by deafult.
              */
-            void start(uint16_t port, std::size_t num_workers = 0);
+            void start(uint16_t port, std::size_t num_workers);
 
             /**
              * @brief The main loop for the master thread responsible for managing connections and distributing orders.
@@ -110,7 +115,7 @@ namespace SFS {
             /**
              * @returns The path of the directory containing the files to serve. This is used to calculate the full path of a requested file.
              */
-            std::filesystem::path get_base_dir();
+            std::filesystem::path get_base_dir() const;
     };
 }
 

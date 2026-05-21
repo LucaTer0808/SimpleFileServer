@@ -1,7 +1,7 @@
 #ifndef log_level_hpp
 #define log_level_hpp
 
-namespace SWS {
+namespace SFS {
     enum class LogLevel { 
         INFO,
         WARNING,
