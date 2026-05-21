@@ -66,7 +66,7 @@ SFS::ConnectionStatus SFS::Connection::send(const std::string& data) {
 
 SFS::ConnectionStatus SFS::Connection::push_data() {
     while(!this->buffer_out.empty()) {
-        std::size_t sent = ::send(this->client_fd,
+        ssize_t sent = ::send(this->client_fd,
             this->buffer_out.data(),
             this->buffer_out.size(),
             MSG_NOSIGNAL
@@ -147,7 +147,13 @@ SFS::ConnectionStatus SFS::Connection::try_serve_future() {
     this->responses.pop();
 
     SFS::log(SFS::LogLevel::INFO, "Finished serving the response to client with FD: " + std::to_string(this->client_fd));
-    return this->send(response);
+    SFS::ConnectionStatus status = this->send(response);
+
+    if (status == SFS::ConnectionStatus::COMPLETE) {
+        return SFS::ConnectionStatus::CLOSED;
+    }
+
+    return status;
 }
 
 bool SFS::Connection::is_future_complete() const {

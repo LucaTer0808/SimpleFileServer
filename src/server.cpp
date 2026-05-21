@@ -176,6 +176,7 @@ void SFS::Server::update_event_subscription(int fd, SFS::ConnectionStatus status
 
     switch (status) {
         case SFS::ConnectionStatus::ERROR:
+        case SFS::ConnectionStatus::CLOSED:
             event_handler_success = this->event_handler.remove(fd);
             this->conns.erase(fd);
             return;
