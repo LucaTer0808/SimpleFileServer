@@ -83,13 +83,12 @@ void SFS::Server::worker_thread_loop() {
         
 
         std::stringstream buffer;
-        buffer << file.rdbuf();
+        buffer << file.rdbuf() << "\r\n\r\n";
         jobToProcess.promise.set_value(buffer.str());
         SFS::log(SFS::LogLevel::INFO, "Worker thread " + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + " has finished processing the job with request: " + path);
     }
 }
 
-// TODO: Implement
 void SFS::Server::handle_socket_events(uint32_t event_mask) {
     if (event_mask & EPOLLIN) {
         std::vector<std::unique_ptr<SFS::Connection>> new_conns = this->listening_socket->accept();
