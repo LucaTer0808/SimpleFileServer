@@ -34,6 +34,7 @@ void SFS::Server::master_thread_loop() {
     while(true) {
         for (auto& [fd, conn] : this->conns) {
             SFS::ConnectionStatus status = conn->try_serve_future();
+            // TODO: Change deleting a connection while iterating over the conns
             this->update_event_subscription(fd, status);
         }
 
