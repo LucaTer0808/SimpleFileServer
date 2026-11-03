@@ -20,6 +20,7 @@
 namespace SFS {
     class Server {
         private:
+            int wakeup_fd = -1;
             std::filesystem::path base_dir;
 
             SFS::ThreadSafeQueue<SFS::Job> jobs;

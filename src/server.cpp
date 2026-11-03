@@ -1,9 +1,13 @@
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 #include "server.hpp"
 #include "common/log.hpp"
+
+constexpr std::uint64_t one = 1;
 
 SFS::Server::Server(std::string path) : base_dir(std::filesystem::canonical(path)), jobs(), worker_threads(), listening_socket(nullptr), conns(), event_handler() {
 }
@@ -20,6 +24,18 @@ void SFS::Server::start(uint16_t port, std::size_t num_workers) {
 
     std::size_t actual_concurrency = this->calculate_thread_number(num_workers);
 
+    this->wakeup_fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    
+    if (this->wakeup_fd == -1) {
+        SFS::log_errno("Creating an eventfd for waking up the master thread has failed!");
+        throw std::runtime_error("eventfd failed");
+    }
+
+    if (!this->event_handler.add(this->wakeup_fd, EPOLLIN)) {
+        SFS::log(SFS::LogLevel::ERROR, "Adding the wakeup fd to the event handler has failed!");
+        throw std::runtime_error("Adding wakeup fd to event handler failed");
+    }
+
     for (std::size_t i = 0; i < actual_concurrency; ++i) {
         this->worker_threads.emplace_back([this]() {
             this->worker_thread_loop();
@@ -32,19 +48,23 @@ void SFS::Server::start(uint16_t port, std::size_t num_workers) {
 
 void SFS::Server::master_thread_loop() {
     while(true) {
-        std::vector<int> fds_to_remove;
+        std::unordered_set<int> ready_fds{};
+        int fd = -1;
 
-        for (auto& [fd, conn] : this->conns) {
-            SFS::ConnectionStatus status = conn->try_serve_future();
-            bool successful = this->update_event_subscription(fd, status);
-
-            if (!successful) {
-                fds_to_remove.push_back(fd);
-            }
+        while(this->completed_fds.try_pop(fd)) {
+            ready_fds.insert(fd);
         }
 
-        for (int fd : fds_to_remove) {
-            this->conns.erase(fd);
+        for (int fd : ready_fds) {
+            auto it = this->conns.find(fd);
+            if (it == this->conns.end()) {
+                SFS::log(SFS::LogLevel::WARNING, std::format("The fd: {} does not represent an active connection!", fd));
+                continue;
+            }
+
+            if (!this->update_event_subscription(fd, it->second->try_serve_future())) {
+                this->conns.erase(it);
+            }
         }
 
         std::unordered_map<int, uint32_t> events = this->event_handler.wait_events();
@@ -52,6 +72,9 @@ void SFS::Server::master_thread_loop() {
         for (auto& [fd, event_mask] : events) {
             if (fd == this->listening_socket->get_fd()) {
                 this->handle_socket_events(event_mask);
+            } else if (fd == this->wakeup_fd) {
+                std::uint64_t counter{};
+                ::read(this->wakeup_fd, &counter, sizeof(counter));
             } else {
                 this->handle_connection_event(fd, event_mask);
             }
@@ -69,16 +92,22 @@ void SFS::Server::worker_thread_loop() {
 
         if (!path.empty() && path.front() == '/') {
             jobToProcess.promise.set_value("The path you passed is invalid! It must not start with '/' to prevent directory traversal attacks!");
+            this->completed_fds.push(jobToProcess.client_fd);
+            ::write(this->wakeup_fd, &one, sizeof(one)); 
             continue;
         }
 
         if (!path.empty() && path.back() == '/') {
             jobToProcess.promise.set_value("The path you passed is invalid! It must not end with '/' to prevent directory traversal attacks!");
+            this->completed_fds.push(jobToProcess.client_fd);
+            ::write(this->wakeup_fd, &one, sizeof(one)); 
             continue;
         }
 
         if (path.find("..") != std::string::npos) {
             jobToProcess.promise.set_value("The path you passed is invalid! It must not contain '..' to prevent directory traversal attacks!");
+            this->completed_fds.push(jobToProcess.client_fd);
+            ::write(this->wakeup_fd, &one, sizeof(one)); 
             continue;
         }
 
@@ -88,6 +117,8 @@ void SFS::Server::worker_thread_loop() {
         std::ifstream file(full_path, std::ios::binary);
         if (!file) {
             jobToProcess.promise.set_value("The requested file could not be found on the server!");
+            this->completed_fds.push(jobToProcess.client_fd);
+            ::write(this->wakeup_fd, &one, sizeof(one)); 
             continue;
         }
         
@@ -96,6 +127,7 @@ void SFS::Server::worker_thread_loop() {
         buffer << file.rdbuf() << "\r\n\r\n";
         jobToProcess.promise.set_value(buffer.str());
         this->completed_fds.push(jobToProcess.client_fd);
+        ::write(this->wakeup_fd, &one, sizeof(one)); 
         SFS::log(SFS::LogLevel::INFO, "Worker thread " + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + " has finished processing the job with request: " + path);
     }
 }
