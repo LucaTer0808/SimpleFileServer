@@ -87,8 +87,11 @@ namespace SFS {
 
             /**
              * @brief Updates the event subscription for a connection after trying to serve a future. If the status is WANT_WRITE, we need to subscribe for EPOLLOUT, otherwise we can just subscribe for EPOLLIN.
+             * @return true, if the subscription change was successful, false if an error occured and the connection has to be closed.
+             * @param fd The file descriptor representing the connection to update the subscription for.
+             * @param status The status returned by the try_serve_future() method of the connection
              */
-            void update_event_subscription(int fd, SFS::ConnectionStatus status);
+            bool update_event_subscription(int fd, SFS::ConnectionStatus status);
 
         public:
             /**

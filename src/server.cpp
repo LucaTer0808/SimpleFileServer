@@ -32,10 +32,19 @@ void SFS::Server::start(uint16_t port, std::size_t num_workers) {
 
 void SFS::Server::master_thread_loop() {
     while(true) {
+        std::vector<int> fds_to_remove;
+
         for (auto& [fd, conn] : this->conns) {
             SFS::ConnectionStatus status = conn->try_serve_future();
-            // TODO: Change deleting a connection while iterating over the conns
-            this->update_event_subscription(fd, status);
+            bool successful = this->update_event_subscription(fd, status);
+
+            if (!successful) {
+                fds_to_remove.push_back(fd);
+            }
+        }
+
+        for (int fd : fds_to_remove) {
+            this->conns.erase(fd);
         }
 
         std::unordered_map<int, uint32_t> events = this->event_handler.wait_events();
@@ -134,7 +143,11 @@ void SFS::Server::handle_connection_event(int fd, uint32_t event_mask) {
         status = conn.push_data();
     }
 
-    this->update_event_subscription(fd, status);
+    bool successful = this->update_event_subscription(fd, status);
+
+    if (!successful) {
+        this->conns.erase(fd);
+    }
 }
 
 void SFS::Server::append_job(SFS::Connection& conn, std::string request_string) {
@@ -171,15 +184,14 @@ std::filesystem::path SFS::Server::get_base_dir() const {
     return this->base_dir;
 }
 
-void SFS::Server::update_event_subscription(int fd, SFS::ConnectionStatus status) {
-        bool event_handler_success;
+bool SFS::Server::update_event_subscription(int fd, SFS::ConnectionStatus status) {
+    bool event_handler_success;
 
     switch (status) {
         case SFS::ConnectionStatus::ERROR:
         case SFS::ConnectionStatus::CLOSED:
             event_handler_success = this->event_handler.remove(fd);
-            this->conns.erase(fd);
-            return;
+            return false;
         
         case SFS::ConnectionStatus::WANT_WRITE:
             event_handler_success = this->event_handler.edit(fd, EPOLLIN | EPOLLOUT);
@@ -196,6 +208,8 @@ void SFS::Server::update_event_subscription(int fd, SFS::ConnectionStatus status
 
     if (!event_handler_success) {
         this->event_handler.remove(fd);
-        this->conns.erase(fd);
+        return false;
     }
+
+    return true;
 }
