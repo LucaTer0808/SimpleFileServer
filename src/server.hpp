@@ -23,6 +23,7 @@ namespace SFS {
             std::filesystem::path base_dir;
 
             SFS::ThreadSafeQueue<SFS::Job> jobs;
+            SFS::ThreadSafeQueue<int> completed_fds;
 
             std::vector<std::jthread> worker_threads;
 

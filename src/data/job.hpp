@@ -10,6 +10,7 @@ namespace SFS {
     struct Job {
         std::promise<std::string> promise;
         std::string request;
+        int client_fd = -1;
     };
 }
 

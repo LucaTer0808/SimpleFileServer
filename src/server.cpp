@@ -95,6 +95,7 @@ void SFS::Server::worker_thread_loop() {
         std::stringstream buffer;
         buffer << file.rdbuf() << "\r\n\r\n";
         jobToProcess.promise.set_value(buffer.str());
+        this->completed_fds.push(jobToProcess.client_fd);
         SFS::log(SFS::LogLevel::INFO, "Worker thread " + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + " has finished processing the job with request: " + path);
     }
 }
@@ -160,6 +161,7 @@ void SFS::Server::append_job(SFS::Connection& conn, std::string request_string) 
     SFS::Job job;
     job.request = std::move(request_string);
     job.promise = std::move(promise);
+    job.client_fd = conn.get_client_fd();
 
     SFS::log(SFS::LogLevel::INFO, "Pushing a new job to the job queue for connection with FD: " + std::to_string(conn.get_client_fd()) + ". Request: " + request_string);
     this->jobs.push(std::move(job));
